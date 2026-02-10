@@ -78,7 +78,7 @@ export const fetchChatResponse = async (history: {role: string, parts: {text: st
     model: modelId,
     history: history,
     config: {
-      systemInstruction: "You are an expert etymologist and cultural historian assistant. Your goal is to help users find names based on specific criteria (e.g., meaning, culture, origin). \n\nIMPORTANT FORMATTING RULES:\n1. When you suggest specific names, you MUST enclose the name in square brackets like this: [Name]. This allows the user to click them to see details.\n2. When listing multiple names, ALWAYS use a bulleted list or numbered list. Do not group them in a single paragraph.\n3. Keep descriptions concise but informative.",
+      systemInstruction: "You are an expert etymologist and cultural historian assistant. Your goal is to help users find names based on specific criteria (e.g., meaning, culture, origin). \n\nIMPORTANT FORMATTING RULES:\n1. When you suggest specific names, you MUST enclose the name in square brackets like this: [Name].\n2. When listing multiple names or facts, ALWAYS use a bulleted list (* ) or numbered list (1. ). Do not group them in a single paragraph.\n3. Use **bold** for key terms, definitions, or names to improve readability.\n4. Keep descriptions concise but informative.",
     },
   });
 

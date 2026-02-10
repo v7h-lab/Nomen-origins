@@ -9,6 +9,78 @@ interface ChatInterfaceProps {
   isLoading: boolean;
 }
 
+// Component to handle rich text rendering (Bold, Links, Lists)
+const MessageContent: React.FC<{ text: string, onNameClick: (name: string) => void }> = ({ text, onNameClick }) => {
+  const parseInline = (text: string): React.ReactNode => {
+    // Split by bold (**...**) and links ([...])
+    const parts = text.split(/(\*\*.*?\*\*|\[.*?\])/g);
+    
+    return parts.map((part, idx) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={idx} className="font-bold text-slate-900">{parseInline(part.slice(2, -2))}</strong>;
+      }
+      if (part.startsWith('[') && part.endsWith(']')) {
+        const name = part.slice(1, -1);
+        return (
+          <button
+            key={idx}
+            onClick={() => onNameClick(name)}
+            className="inline-flex items-center px-1.5 py-0.5 mx-0.5 rounded-md bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-800 border border-indigo-200 text-xs font-semibold transition-colors align-baseline transform translate-y-px"
+          >
+            {name}
+          </button>
+        );
+      }
+      return part;
+    });
+  };
+
+  const lines = text.split('\n');
+
+  return (
+    <div className="space-y-1 text-sm leading-relaxed">
+      {lines.map((line, idx) => {
+        const trimmed = line.trim();
+        if (!trimmed) return <div key={idx} className="h-2" />; // Empty line spacing
+
+        // Check for bullet or number (starts with * or - or 1. followed by space)
+        const listMatch = trimmed.match(/^([*-]|\d+\.)\s/);
+        const isList = !!listMatch;
+        const listMarker = listMatch ? listMatch[1] : null;
+
+        // Check indentation (simple count of leading spaces, assuming 2 spaces per level for raw text)
+        // We use regex to find leading whitespace length
+        const leadingSpaces = line.match(/^\s*/)?.[0].length || 0;
+        const indentLevel = Math.floor(leadingSpaces / 2); 
+        
+        const content = isList ? trimmed.replace(/^([*-]|\d+\.)\s/, '') : trimmed;
+        
+        return (
+          <div key={idx} className="flex items-start group">
+            {/* Indentation spacer */}
+            {indentLevel > 0 && <div style={{ width: `${indentLevel * 12}px` }} className="shrink-0" />}
+            
+            {/* List Marker */}
+            {isList && (
+              <div className="pt-[0.4em] pr-2 shrink-0 min-w-[20px] flex justify-end">
+                 {['*', '-'].includes(listMarker!.replace('.','')) ? (
+                    <div className="w-1.5 h-1.5 rounded-full bg-slate-400 group-hover:bg-indigo-400 transition-colors mt-[0.1em]" />
+                 ) : (
+                    <span className="text-slate-500 font-semibold text-xs tabular-nums">{listMarker}</span>
+                 )}
+              </div>
+            )}
+            
+            <div className={`flex-1 break-words ${!isList && indentLevel > 0 ? 'pl-4' : ''}`}>
+               {parseInline(content)}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, onNameClick, isLoading }) => {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -27,27 +99,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
       onSendMessage(input.trim());
       setInput('');
     }
-  };
-
-  // Function to parse text and make [Name] clickable
-  const renderMessageText = (text: string) => {
-    const parts = text.split(/(\[.*?\])/g);
-    
-    return parts.map((part, index) => {
-      if (part.startsWith('[') && part.endsWith(']')) {
-        const name = part.slice(1, -1);
-        return (
-          <button
-            key={index}
-            onClick={() => onNameClick(name)}
-            className="inline-flex items-center px-2 py-0.5 mx-0.5 rounded-md bg-indigo-100 text-indigo-700 hover:bg-indigo-200 hover:text-indigo-900 font-medium transition-colors text-sm -mb-0.5"
-          >
-            {name}
-          </button>
-        );
-      }
-      return <span key={index}>{part}</span>;
-    });
   };
 
   return (
@@ -84,11 +135,15 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
               ${msg.role === 'user' ? 'bg-slate-200 text-slate-500' : 'bg-indigo-100 text-indigo-600'}`}>
               {msg.role === 'user' ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
             </div>
-            <div className={`rounded-2xl p-3.5 max-w-[85%] text-sm leading-relaxed shadow-sm whitespace-pre-wrap
+            <div className={`rounded-2xl p-3.5 max-w-[85%] shadow-sm
               ${msg.role === 'user' 
                 ? 'bg-slate-800 text-slate-100 rounded-tr-none' 
                 : 'bg-white border border-slate-100 text-slate-700 rounded-tl-none'}`}>
-              {renderMessageText(msg.text)}
+              {msg.role === 'user' ? (
+                  <div className="whitespace-pre-wrap text-sm">{msg.text}</div>
+              ) : (
+                  <MessageContent text={msg.text} onNameClick={onNameClick} />
+              )}
             </div>
           </div>
         ))}
