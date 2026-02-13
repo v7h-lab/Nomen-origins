@@ -1,11 +1,18 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { EtymologyData } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+let _ai: GoogleGenAI | null = null;
+const getAI = () => {
+  if (!_ai) {
+    const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY || '';
+    _ai = new GoogleGenAI({ apiKey });
+  }
+  return _ai;
+};
 
 export const fetchEtymology = async (name: string): Promise<EtymologyData> => {
   const modelId = "gemini-3-flash-preview";
-  
+
   const prompt = `
     Analyze the etymology of the name "${name}". 
     Provide a detailed breakdown including its meaning, origin roots (linguistic), gender association, 
@@ -16,7 +23,7 @@ export const fetchEtymology = async (name: string): Promise<EtymologyData> => {
     Classify locations as 'origin' (where it started), 'usage' (where it is popular), or 'cultural' (mythology/literature spots).
   `;
 
-  const response = await ai.models.generateContent({
+  const response = await getAI().models.generateContent({
     model: modelId,
     contents: prompt,
     config: {
@@ -27,9 +34,9 @@ export const fetchEtymology = async (name: string): Promise<EtymologyData> => {
           name: { type: Type.STRING },
           meaning: { type: Type.STRING },
           gender: { type: Type.STRING },
-          originRoots: { 
-            type: Type.ARRAY, 
-            items: { type: Type.STRING } 
+          originRoots: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING }
           },
           locations: {
             type: Type.ARRAY,
@@ -71,10 +78,10 @@ export const fetchEtymology = async (name: string): Promise<EtymologyData> => {
   }
 };
 
-export const fetchChatResponse = async (history: {role: string, parts: {text: string}[]}[], newMessage: string): Promise<string> => {
+export const fetchChatResponse = async (history: { role: string, parts: { text: string }[] }[], newMessage: string): Promise<string> => {
   const modelId = "gemini-3-flash-preview";
 
-  const chat = ai.chats.create({
+  const chat = getAI().chats.create({
     model: modelId,
     history: history,
     config: {
