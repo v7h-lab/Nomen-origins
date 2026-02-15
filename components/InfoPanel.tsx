@@ -84,22 +84,22 @@ const InfoPanel: React.FC<InfoPanelProps> = ({
              <ArrowLeft className="w-4 h-4" /> Back to History
           </button>
 
-          <div className="flex items-center justify-between mb-2">
-            <h1 className="text-4xl font-serif font-bold text-slate-900 tracking-tight flex items-center gap-3">
+          <h1 className="text-4xl font-serif font-bold text-slate-900 tracking-tight">
               {data.name}
-              {data.locations.length > 0 && (
-                  <button 
-                    onClick={onToggleTour}
-                    className={`rounded-full p-2 transition-all duration-300 border-2 
-                        ${isTouring 
-                            ? 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100' 
-                            : 'bg-indigo-50 border-indigo-200 text-indigo-600 hover:bg-indigo-100'}`}
-                    title={isTouring ? "Stop Tour" : "Start Tour"}
-                  >
-                    {isTouring ? <Square className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current pl-0.5" />}
-                  </button>
-              )}
-            </h1>
+          </h1>
+          <div className="flex items-center gap-3 mt-2">
+            {data.locations.length > 0 && (
+                <button 
+                  onClick={onToggleTour}
+                  className={`rounded-full p-2 transition-all duration-300 border-2 
+                      ${isTouring 
+                          ? 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100' 
+                          : 'bg-indigo-50 border-indigo-200 text-indigo-600 hover:bg-indigo-100'}`}
+                  title={isTouring ? "Stop Tour" : "Start Tour"}
+                >
+                  {isTouring ? <Square className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current pl-0.5" />}
+                </button>
+            )}
             {shouldShowGenderTag(data.gender) && (
                 <span className="text-xs font-bold uppercase tracking-widest text-indigo-500 bg-indigo-50 px-3 py-1 rounded-full">
                   {data.gender}

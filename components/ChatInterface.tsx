@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChatMessage } from '../types';
-import { Send, Sparkles, Bot, User, Loader2 } from 'lucide-react';
+import { Send, Sparkles, Loader2 } from 'lucide-react';
 
 interface ChatInterfaceProps {
   messages: ChatMessage[];
@@ -9,76 +9,52 @@ interface ChatInterfaceProps {
   isLoading: boolean;
 }
 
-// Component to handle rich text rendering (Bold, Links, Lists)
-const MessageContent: React.FC<{ text: string, onNameClick: (name: string) => void }> = ({ text, onNameClick }) => {
-  const parseInline = (text: string): React.ReactNode => {
-    // Split by bold (**...**) and links ([...])
-    const parts = text.split(/(\*\*.*?\*\*|\[.*?\])/g);
-    
-    return parts.map((part, idx) => {
-      if (part.startsWith('**') && part.endsWith('**')) {
-        return <strong key={idx} className="font-bold text-slate-900">{parseInline(part.slice(2, -2))}</strong>;
-      }
-      if (part.startsWith('[') && part.endsWith(']')) {
-        const name = part.slice(1, -1);
-        return (
-          <button
-            key={idx}
-            onClick={() => onNameClick(name)}
-            className="inline-flex items-center px-1.5 py-0.5 mx-0.5 rounded-md bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-800 border border-indigo-200 text-xs font-semibold transition-colors align-baseline transform translate-y-px"
-          >
-            {name}
-          </button>
-        );
-      }
-      return part;
-    });
-  };
+// Renders inline markdown: **bold**, *italic*, [ClickableName]
+const renderInline = (
+  text: string,
+  onNameClick: (name: string) => void,
+  keyPrefix: string
+): React.ReactNode[] => {
+  // Step 1: Strip bold/italic wrapping around [Name] — e.g. **[Name]** → [Name]
+  const cleaned = text.replace(/\*{1,2}\[([^\]]+)\]\*{1,2}/g, '[$1]');
 
-  const lines = text.split('\n');
+  // Step 2: Split by [Name] FIRST (highest priority)
+  const parts = cleaned.split(/(\[[^\]]+\])/g);
 
-  return (
-    <div className="space-y-1 text-sm leading-relaxed">
-      {lines.map((line, idx) => {
-        const trimmed = line.trim();
-        if (!trimmed) return <div key={idx} className="h-2" />; // Empty line spacing
+  return parts.map((part, i) => {
+    const key = `${keyPrefix}-${i}`;
 
-        // Check for bullet or number (starts with * or - or 1. followed by space)
-        const listMatch = trimmed.match(/^([*-]|\d+\.)\s/);
-        const isList = !!listMatch;
-        const listMarker = listMatch ? listMatch[1] : null;
+    // [ClickableName]
+    if (part.startsWith('[') && part.endsWith(']')) {
+      const name = part.slice(1, -1);
+      return (
+        <button
+          key={key}
+          onClick={() => onNameClick(name)}
+          className="inline-flex items-center px-2.5 py-1 mx-0.5 my-0.5 rounded-full bg-indigo-100 text-indigo-700 hover:bg-indigo-200 hover:text-indigo-900 font-semibold transition-colors text-[12px] border border-indigo-200 cursor-pointer"
+        >
+          {name}
+        </button>
+      );
+    }
 
-        // Check indentation (simple count of leading spaces, assuming 2 spaces per level for raw text)
-        // We use regex to find leading whitespace length
-        const leadingSpaces = line.match(/^\s*/)?.[0].length || 0;
-        const indentLevel = Math.floor(leadingSpaces / 2); 
-        
-        const content = isList ? trimmed.replace(/^([*-]|\d+\.)\s/, '') : trimmed;
-        
-        return (
-          <div key={idx} className="flex items-start group">
-            {/* Indentation spacer */}
-            {indentLevel > 0 && <div style={{ width: `${indentLevel * 12}px` }} className="shrink-0" />}
-            
-            {/* List Marker */}
-            {isList && (
-              <div className="pt-[0.4em] pr-2 shrink-0 min-w-[20px] flex justify-end">
-                 {['*', '-'].includes(listMarker!.replace('.','')) ? (
-                    <div className="w-1.5 h-1.5 rounded-full bg-slate-400 group-hover:bg-indigo-400 transition-colors mt-[0.1em]" />
-                 ) : (
-                    <span className="text-slate-500 font-semibold text-xs tabular-nums">{listMarker}</span>
-                 )}
-              </div>
-            )}
-            
-            <div className={`flex-1 break-words ${!isList && indentLevel > 0 ? 'pl-4' : ''}`}>
-               {parseInline(content)}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
+    // Step 3: For non-name parts, handle **bold** and *italic*
+    const inlineParts = part.split(/(\*\*.*?\*\*|\*.*?\*)/g);
+    return (
+      <span key={key}>
+        {inlineParts.map((inline, j) => {
+          const iKey = `${key}-${j}`;
+          if (inline.startsWith('**') && inline.endsWith('**')) {
+            return <strong key={iKey} className="font-semibold text-slate-800">{inline.slice(2, -2)}</strong>;
+          }
+          if (inline.startsWith('*') && inline.endsWith('*') && !inline.startsWith('**')) {
+            return <em key={iKey} className="italic text-slate-600">{inline.slice(1, -1)}</em>;
+          }
+          return <span key={iKey}>{inline}</span>;
+        })}
+      </span>
+    );
+  });
 };
 
 const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, onNameClick, isLoading }) => {
@@ -101,6 +77,114 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
     }
   };
 
+  // Renders full markdown: headings, lists, paragraphs with inline formatting
+  const renderMarkdown = (text: string) => {
+    const lines = text.split('\n');
+    const elements: React.ReactNode[] = [];
+    let listItems: React.ReactNode[] = [];
+    let lineIndex = 0;
+
+    const flushList = () => {
+      if (listItems.length > 0) {
+        elements.push(
+          <ul key={`list-${lineIndex}`} className="space-y-1.5 my-2 pl-1">
+            {listItems}
+          </ul>
+        );
+        listItems = [];
+      }
+    };
+
+    for (let i = 0; i < lines.length; i++) {
+      lineIndex = i;
+      const line = lines[i];
+      const trimmed = line.trim();
+
+      // Skip empty lines (but flush lists)
+      if (!trimmed) {
+        flushList();
+        continue;
+      }
+
+      // ### Heading 3
+      if (trimmed.startsWith('### ')) {
+        flushList();
+        elements.push(
+          <h4 key={`h3-${i}`} className="font-bold text-slate-800 text-[13px] mt-3 mb-1 uppercase tracking-wide border-b border-slate-100 pb-1">
+            {trimmed.slice(4)}
+          </h4>
+        );
+        continue;
+      }
+
+      // ## Heading 2
+      if (trimmed.startsWith('## ')) {
+        flushList();
+        elements.push(
+          <h3 key={`h2-${i}`} className="font-bold text-slate-800 text-sm mt-3 mb-1">
+            {trimmed.slice(3)}
+          </h3>
+        );
+        continue;
+      }
+
+      // # Heading 1
+      if (trimmed.startsWith('# ')) {
+        flushList();
+        elements.push(
+          <h2 key={`h1-${i}`} className="font-bold text-slate-900 text-base mt-2 mb-1">
+            {trimmed.slice(2)}
+          </h2>
+        );
+        continue;
+      }
+
+      // Bullet list items: *, -, or numbered (1.)
+      const bulletMatch = trimmed.match(/^[\*\-]\s+(.*)/) || trimmed.match(/^\d+\.\s+(.*)/);
+      if (bulletMatch) {
+        const content = bulletMatch[1];
+        listItems.push(
+          <li key={`li-${i}`} className="flex gap-2 text-[13px] leading-relaxed">
+            <span className="text-indigo-400 mt-0.5 shrink-0">•</span>
+            <span>{renderInline(content, onNameClick, `li-${i}`)}</span>
+          </li>
+        );
+        continue;
+      }
+
+      // Regular paragraph
+      flushList();
+      elements.push(
+        <p key={`p-${i}`} className="text-[13px] leading-relaxed my-1">
+          {renderInline(trimmed, onNameClick, `p-${i}`)}
+        </p>
+      );
+    }
+
+    flushList();
+    return elements;
+  };
+
+  // Simple inline render for user messages (just [Name] links)
+  const renderUserText = (text: string) => {
+    const parts = text.split(/(\[.*?\])/g);
+    return parts.map((part, i) => {
+      if (part.startsWith('[') && part.endsWith(']')) {
+        const name = part.slice(1, -1);
+        return (
+          <button
+            key={i}
+            onClick={() => onNameClick(name)}
+            className="inline-flex items-center px-1.5 py-0.5 mx-0.5 rounded-md bg-white/20 text-white font-medium transition-colors text-sm"
+          >
+            {name}
+          </button>
+        );
+      }
+      return <span key={i}>{part}</span>;
+    });
+  };
+
   return (
     <div className="h-full flex flex-col bg-white/90 backdrop-blur-xl rounded-3xl border border-white/50 shadow-2xl overflow-hidden animate-in slide-in-from-left-4 fade-in duration-500">
       
@@ -116,12 +200,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
         {messages.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center text-center text-slate-500 p-4">
-             <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center mb-4 shadow-sm transform -rotate-6">
-                <Bot className="h-6 w-6 text-indigo-400" />
-             </div>
+             <Sparkles className="h-8 w-8 text-indigo-300 mb-4" />
              <p className="font-medium text-slate-700 mb-2">How can I help you?</p>
              <p className="text-xs text-slate-400 max-w-[200px] leading-relaxed">
                Try "Show me 5 French names that mean light" or "Ancient Greek warrior names"
@@ -130,29 +212,18 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
         )}
         
         {messages.map((msg, idx) => (
-          <div key={idx} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 
-              ${msg.role === 'user' ? 'bg-slate-200 text-slate-500' : 'bg-indigo-100 text-indigo-600'}`}>
-              {msg.role === 'user' ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
-            </div>
-            <div className={`rounded-2xl p-3.5 max-w-[85%] shadow-sm
+          <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div className={`rounded-2xl max-w-[90%] shadow-sm
               ${msg.role === 'user' 
-                ? 'bg-slate-800 text-slate-100 rounded-tr-none' 
-                : 'bg-white border border-slate-100 text-slate-700 rounded-tl-none'}`}>
-              {msg.role === 'user' ? (
-                  <div className="whitespace-pre-wrap text-sm">{msg.text}</div>
-              ) : (
-                  <MessageContent text={msg.text} onNameClick={onNameClick} />
-              )}
+                ? 'bg-slate-800 text-slate-100 rounded-tr-none p-3.5 text-sm' 
+                : 'bg-white border border-slate-100 text-slate-700 rounded-tl-none p-4'}`}>
+              {msg.role === 'user' ? renderUserText(msg.text) : renderMarkdown(msg.text)}
             </div>
           </div>
         ))}
         
         {isLoading && (
-           <div className="flex gap-3">
-             <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center shrink-0 text-indigo-600">
-               <Bot className="w-4 h-4" />
-             </div>
+           <div className="flex justify-start">
              <div className="bg-white border border-slate-100 rounded-2xl rounded-tl-none p-4 shadow-sm flex items-center gap-2">
                 <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
                 <span className="text-xs text-slate-400 font-medium">Thinking...</span>
