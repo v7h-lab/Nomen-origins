@@ -1,16 +1,34 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { EtymologyData } from "../types";
 
+// In development, call Gemini directly. In production, use serverless proxy.
+const isDev = import.meta.env.DEV;
+
 let _ai: GoogleGenAI | null = null;
 const getAI = () => {
   if (!_ai) {
-    const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY || '';
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
     _ai = new GoogleGenAI({ apiKey });
   }
   return _ai;
 };
 
 export const fetchEtymology = async (name: string): Promise<EtymologyData> => {
+  if (!isDev) {
+    // Production: use serverless proxy
+    const res = await fetch('/.netlify/functions/gemini-proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'etymology', name })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+      throw new Error(err.error || `API error: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  // Dev: call Gemini directly
   const modelId = "gemini-3-flash-preview";
 
   const prompt = `
@@ -79,6 +97,22 @@ export const fetchEtymology = async (name: string): Promise<EtymologyData> => {
 };
 
 export const fetchChatResponse = async (history: { role: string, parts: { text: string }[] }[], newMessage: string): Promise<string> => {
+  if (!isDev) {
+    // Production: use serverless proxy
+    const res = await fetch('/.netlify/functions/gemini-proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'chat', history, message: newMessage })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+      throw new Error(err.error || `API error: ${res.status}`);
+    }
+    const data = await res.json();
+    return data.text;
+  }
+
+  // Dev: call Gemini directly
   const modelId = "gemini-3-flash-preview";
 
   const chat = getAI().chats.create({
